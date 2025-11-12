@@ -10,6 +10,7 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
 import mermaid # For generating SVG from Mermaid code
 import cairosvg # For converting SVG to PNG
+from datetime import date # For today's date
 
 def create_single_slide_presentation(md_content, output_path):
     """
@@ -28,7 +29,7 @@ def create_single_slide_presentation(md_content, output_path):
     # Find the main title (H1)
     for line in lines:
         if line.startswith('# '):
-            title = line[2:].strip()
+            title = line[2:].strip() # This already removes '# '
             break
             
     # Extract the content of the Mermaid block
@@ -55,6 +56,10 @@ def create_single_slide_presentation(md_content, output_path):
         if line.strip() == '---': continue
         if mermaid_block_start_line <= i <= mermaid_block_end_line: continue
         
+        # Skip "組織" and "職位" lines
+        if "組織:" in line or "職位:" in line:
+            continue
+
         # Keep the line if it has content
         if line.strip():
             other_content_lines.append(line)
@@ -92,7 +97,7 @@ def create_single_slide_presentation(md_content, output_path):
 
             # Inject font family into Mermaid code
             # This ensures Mermaid.js uses a Chinese-compatible font during SVG generation
-            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}} }}%%\n{mermaid_code}"
+            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}}}}%%{mermaid_code}"
 
             # 1. Generate SVG from Mermaid code directly to file
             mermaid.Mermaid(mermaid_code_with_font).to_svg(path=temp_svg_path)
@@ -136,6 +141,15 @@ def create_single_slide_presentation(md_content, output_path):
         run.text = '\n' + ('-' * 40) + '\n'
         run.font.size = Pt(12)
         run.font.name = 'Microsoft YaHei' # Apply font to separator
+
+    # --- Add today's date as the first line of the first content level ---
+    today_date_str = date.today().strftime('%Y-%m-%d')
+    p_date = tf.add_paragraph()
+    run_date = p_date.add_run()
+    run_date.text = f"Date: {today_date_str}"
+    run_date.font.size = Pt(12)
+    run_date.font.name = 'Microsoft YaHei'
+    p_date.level = 0 # First content level
 
     # Add all other content
     for line_text in other_content_lines:
