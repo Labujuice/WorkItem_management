@@ -44,7 +44,6 @@ def update_project_files(projects_path):
             frontmatter_str = match.group(1)
             project_data = yaml.safe_load(frontmatter_str)
 
-            # Extract progress report
             report_match = re.search(r'## 進度報告\n(.*?)(?=\n## |\Z)', content, re.DOTALL)
             project_data['progress_report'] = report_match.group(1).strip() if report_match else ""
 
@@ -87,7 +86,12 @@ def update_people_file(people_file, projects_with_paths):
         'Completed Projects': []
     }
 
-    gantt_chart_tasks = []
+    gantt_sections = {
+        "In-Progress": [],
+        "Pending": [],
+        "Completed": []
+    }
+    completed_projects_for_gantt = []
     today = date.today()
 
     for item in projects_with_paths:
@@ -98,44 +102,45 @@ def update_people_file(people_file, projects_with_paths):
         if proj_status not in status_map:
             continue
 
-        # --- Gantt Chart Task ---
-        if proj_status == 'In-Progress':
-            start_date_str = str(proj_data.get('start_date', ''))
-            due_date_str = str(proj_data.get('due_date', ''))
-            proj_title = proj_data.get('title', 'N/A')
-            if start_date_str and due_date_str and 'TBD' not in start_date_str:
-                gantt_chart_tasks.append(f"    {proj_title} :{start_date_str}, {due_date_str}")
+        # --- Gantt Chart Data Collection ---
+        start_date_str = str(proj_data.get('start_date', ''))
+        due_date_str = str(proj_data.get('due_date', ''))
+        proj_title = proj_data.get('title', 'N/A')
+
+        if start_date_str and due_date_str and 'TBD' not in start_date_str:
+            task_line = f"    {proj_title} :{start_date_str}, {due_date_str}"
+            if proj_status == 'In-Progress':
+                gantt_sections["In-Progress"].append(task_line)
+            elif proj_status == 'Pending':
+                gantt_sections["Pending"].append(task_line)
+            elif proj_status == 'Completed':
+                end_date_str = str(proj_data.get('actual_end_date') or proj_data.get('due_date'))
+                try:
+                    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                    completed_projects_for_gantt.append({'date': end_date, 'task': task_line})
+                except (ValueError, TypeError):
+                    continue
 
         # --- Progress Calculation ---
         progress = 0
         if proj_status == 'Completed':
             progress = 100
         elif proj_status == 'In-Progress':
-            start_date_str = str(proj_data.get('start_date', ''))
             total_workdays = proj_data.get('estimated_workdays', 0)
-            
             if total_workdays and total_workdays > 0:
                 days_passed = calculate_workdays(start_date_str, today.strftime('%Y-%m-%d'))
                 progress = min(int((days_passed / total_workdays) * 100), 100)
 
         # --- Format Output String ---
         proj_id = proj_data.get('id', 'N/A')
-        proj_title = proj_data.get('title', 'N/A')
-        proj_project = proj_data.get('project', '')
-        
         relative_path = os.path.relpath(proj_path, os.path.dirname(people_file))
-
         output_line = "[{id} {title} {project} {progress}% {workdays}d]({path})".format(
-            id=proj_id,
-            title=proj_title,
-            project=proj_project,
-            progress=progress,
-            workdays=proj_data.get('estimated_workdays', 0),
+            id=proj_id, title=proj_data.get('title', 'N/A'), project=proj_data.get('project', ''),
+            progress=progress, workdays=proj_data.get('estimated_workdays', 0),
             path=relative_path.replace(os.path.sep, '/')
         )
         
         output_item = f"- {output_line}"
-
         if proj_status == 'In-Progress':
             report_content = proj_data.get('progress_report', '')
             if report_content:
@@ -145,15 +150,24 @@ def update_people_file(people_file, projects_with_paths):
         category = status_map[proj_status]
         categorized_projects[category].append(output_item)
 
-    # Build the markdown block
+    # Sort and slice completed projects for Gantt
+    completed_projects_for_gantt.sort(key=lambda x: x['date'], reverse=True)
+    gantt_sections["Completed"] = [p['task'] for p in completed_projects_for_gantt[:3]]
+
+    # --- Build the markdown block ---
     update_block = "<!-- AUTO_UPDATE_START -->\n"
 
-    if gantt_chart_tasks:
+    if any(gantt_sections.values()):
         update_block += "```mermaid\n"
         update_block += "gantt\n"
         update_block += "    dateFormat  YYYY-MM-DD\n"
-        update_block += "    title In-Progress Projects\n"
-        update_block += "\n".join(gantt_chart_tasks)
+        update_block += "    axisFormat %Y-%m\n"
+        update_block += "    title Projects Overview\n"
+        
+        for section_name, tasks in gantt_sections.items():
+            if tasks:
+                update_block += f"\n    section {section_name}\n"
+                update_block += "\n".join(tasks)
         update_block += "\n```\n\n"
 
     for category, items in categorized_projects.items():
@@ -166,16 +180,13 @@ def update_people_file(people_file, projects_with_paths):
         update_block += "\n"
     update_block += "<!-- AUTO_UPDATE_END -->"
 
-    # Read the people file and replace the block
     with open(people_file, 'r+') as f:
         content = f.read()
         pattern = r'<!-- AUTO_UPDATE_START -->.*?<!-- AUTO_UPDATE_END -->'
-        
         if re.search(pattern, content, re.DOTALL):
             new_content = re.sub(pattern, update_block, content, flags=re.DOTALL)
         else:
             new_content = content.rstrip() + "\n\n" + update_block
-
         if new_content != content:
             f.seek(0)
             f.write(new_content)
