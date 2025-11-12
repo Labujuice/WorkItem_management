@@ -72,15 +72,15 @@ def update_people_file(people_file, projects_with_paths):
     Updates the people file with lists of projects based on their status and new format.
     """
     status_map = {
-        'In-Progress': '進行中項目',
-        'Pending': '等待進行項目',
-        'Completed': '以完成項目'
+        'In-Progress': 'In-Progress',
+        'Pending': 'Pending',
+        'Completed': 'Completed'
     }
     
     categorized_projects = {
-        '進行中項目': [],
-        '等待進行項目': [],
-        '以完成項目': []
+        'In-Progress': [],
+        'Pending': [],
+        'Completed': []
     }
 
     today = date.today()
