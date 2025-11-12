@@ -154,6 +154,11 @@ def update_people_file(people_file, projects_with_paths):
     completed_projects_for_gantt.sort(key=lambda x: x['date'], reverse=True)
     gantt_sections["Completed"] = [p['task'] for p in completed_projects_for_gantt[:3]]
 
+    # Sort projects within each category by filename in descending order
+    for category in categorized_projects:
+        # Extract the filename from the markdown link path for sorting
+        categorized_projects[category].sort(key=lambda item: os.path.basename(re.search(r'\((.*?)\)', item).group(1)), reverse=True)
+
     # --- Build the markdown block ---
     update_block = "<!-- AUTO_UPDATE_START -->\n"
 
