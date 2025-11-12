@@ -72,15 +72,15 @@ def update_people_file(people_file, projects_with_paths):
     Updates the people file with lists of projects based on their status and new format.
     """
     status_map = {
-        'In-Progress': 'In-Progress',
-        'Pending': 'Pending',
-        'Completed': 'Completed'
+        'In-Progress': 'In-Progress Projects',
+        'Pending': 'Pending Projects',
+        'Completed': 'Completed Projects'
     }
     
     categorized_projects = {
-        'In-Progress': [],
-        'Pending': [],
-        'Completed': []
+        'In-Progress Projects': [],
+        'Pending Projects': [],
+        'Completed Projects': []
     }
 
     today = date.today()
@@ -113,11 +113,12 @@ def update_people_file(people_file, projects_with_paths):
         # Create relative path for the link
         relative_path = os.path.relpath(proj_path, os.path.dirname(people_file))
 
-        output_line = "[{id} {title} {project} {progress}%]({path})".format(
+        output_line = "[{id} {title} {project} {progress}% {workdays}d]({path})".format(
             id=proj_id,
             title=proj_title,
             project=proj_project,
             progress=progress,
+            workdays=proj_data.get('estimated_workdays', 0),
             path=relative_path.replace(os.path.sep, '/') # Ensure forward slashes for markdown links
         )
         
