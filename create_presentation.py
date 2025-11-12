@@ -67,6 +67,10 @@ def create_single_slide_presentation(md_content, output_path):
     # --- 2. Create the Presentation ---
     
     prs = Presentation()
+    # Set slide aspect ratio to 16:10 (e.g., 12 inches x 7.5 inches)
+    prs.slide_width = Inches(12)
+    prs.slide_height = Inches(7.5)
+
     # Use "Title and Content" layout
     slide_layout = prs.slide_layouts[1] 
     slide = prs.slides.add_slide(slide_layout)
@@ -84,6 +88,9 @@ def create_single_slide_presentation(md_content, output_path):
 
     # --- Handle Mermaid Gantt Chart ---
     gantt_image_path = None
+    image_height_in_inches = Inches(3.5) # Adjusted height for 16:10
+    image_top_in_inches = Inches(1.2) # Adjusted top position
+
     if mermaid_code.strip():
         print("Attempting to render Mermaid Gantt chart to image...")
         temp_svg_path = None
@@ -97,7 +104,7 @@ def create_single_slide_presentation(md_content, output_path):
 
             # Inject font family into Mermaid code
             # This ensures Mermaid.js uses a Chinese-compatible font during SVG generation
-            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}}}}%%{mermaid_code}"
+            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}}}}%%\n{mermaid_code}"
 
             # 1. Generate SVG from Mermaid code directly to file
             mermaid.Mermaid(mermaid_code_with_font).to_svg(path=temp_svg_path)
@@ -124,15 +131,15 @@ def create_single_slide_presentation(md_content, output_path):
     if gantt_image_path:
         # Position the image at the top of the slide
         left = Inches(0.5)
-        top = Inches(1.5) # Below the title
-        width = Inches(9)
-        height = Inches(3) # Adjust as needed
+        top = image_top_in_inches
+        width = Inches(11) # Adjusted width for 16:10
+        height = image_height_in_inches
 
         pic = slide.shapes.add_picture(gantt_image_path, left, top, width=width, height=height)
         
         # Adjust the text frame position to be below the image
         tf.top = top + height + Inches(0.2) # 0.2 inch padding
-        tf.height = prs.slide_height - tf.top - Inches(0.5) # Remaining height
+        tf.height = prs.slide_height - tf.top - Inches(0.5) # Remaining height with bottom margin
 
     # Add a separator line if an image was inserted, or if falling back to text
     if gantt_image_path or mermaid_code.strip():
@@ -158,7 +165,7 @@ def create_single_slide_presentation(md_content, output_path):
         cleaned_text = line_text.strip() # Remove all leading/trailing whitespace
 
         # Remove Links from Sub-items: finds [text](url) and replaces it with just text
-        cleaned_text = re.sub(r'\[(.*?)\]\(.*\)', r'\1', cleaned_text)
+        cleaned_text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', cleaned_text)
 
         run = p.add_run() # Add a run to the paragraph
         run.font.size = Pt(12)
