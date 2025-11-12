@@ -211,7 +211,12 @@ def update_people_file(people_file, projects_with_paths):
             if tasks:
                 update_block += f"\n    section {section_name}\n"
                 update_block += "\n".join(tasks)
-        update_block += "\n```\n\n"
+        update_block += "\n```\n\n" # End of Gantt block
+
+        # Add today's date after the Gantt chart
+        today_date_str = date.today().strftime('%Y-%m-%d')
+        update_block += f"Generate Date: {today_date_str}\n\n"
+
 
     for category, items in categorized_projects.items():
         update_block += f"### {category}\n"
