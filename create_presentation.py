@@ -4,20 +4,23 @@
 import os
 import glob
 import re
+import tempfile # For temporary files
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
+import mermaid # For generating SVG from Mermaid code
+import cairosvg # For converting SVG to PNG
 
 def create_single_slide_presentation(md_content, output_path):
     """
     Parses markdown content to create a single-slide presentation.
-    The slide will contain the Gantt chart at the top and all other
+    The slide will contain the Gantt chart as an image at the top and all other
     relevant information below, with a font size of 12.
     """
     lines = md_content.split('\n')
     
     title = "Work Status Report" # Default title
-    mermaid_content = ""
+    mermaid_code = ""
     other_content_lines = []
 
     # --- 1. Parse Markdown Content ---
@@ -30,32 +33,27 @@ def create_single_slide_presentation(md_content, output_path):
             
     # Extract the content of the Mermaid block
     in_mermaid = False
-    mermaid_lines = []
-    for line in lines:
+    mermaid_block_start_line = -1
+    mermaid_block_end_line = -1
+    for i, line in enumerate(lines):
         if line.strip() == '```mermaid':
             in_mermaid = True
+            mermaid_block_start_line = i
             continue
         if in_mermaid and line.strip() == '```':
             in_mermaid = False
-            continue # Also skip the closing backticks line
+            mermaid_block_end_line = i
+            break
         if in_mermaid:
-            mermaid_lines.append(line)
-    mermaid_content = "\n".join(mermaid_lines)
-
+            mermaid_code += line + '\n'
+    
     # Gather all other relevant content lines
-    in_mermaid = False
-    for line in lines:
+    for i, line in enumerate(lines):
         # Skip title, comments, horizontal rules, and the mermaid block itself
         if line.startswith('# '): continue
         if line.strip().startswith('<!--'): continue
         if line.strip() == '---': continue
-        if line.strip() == '```mermaid':
-            in_mermaid = True
-            continue
-        if in_mermaid and line.strip() == '```':
-            in_mermaid = False
-            continue
-        if in_mermaid: continue
+        if mermaid_block_start_line <= i <= mermaid_block_end_line: continue
         
         # Keep the line if it has content
         if line.strip():
@@ -77,19 +75,63 @@ def create_single_slide_presentation(md_content, output_path):
     tf.clear()  # Clear default text
     tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
 
-    # Add Mermaid Gantt chart content first
-    p_mermaid = tf.add_paragraph()
-    p_mermaid.text = mermaid_content
-    # Set font for all runs in the paragraph
-    for run in p_mermaid.runs:
-        run.font.size = Pt(12)
-        run.font.name = 'Courier New' # Use a monospaced font for the chart
+    # --- Handle Mermaid Gantt Chart ---
+    gantt_image_path = None
+    if mermaid_code.strip():
+        print("Attempting to render Mermaid Gantt chart to image...")
+        temp_svg_file = None
+        temp_png_file = None
+        try:
+            # 1. Generate SVG from Mermaid code
+            svg_string = mermaid.Mermaid(mermaid_code).to_svg()
+            
+            temp_svg_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
+            temp_svg_file.write(svg_string.encode('utf-8'))
+            temp_svg_path = temp_svg_file.name
+            temp_svg_file.close()
 
-    # Add a separator line
-    p_sep = tf.add_paragraph()
-    p_sep.text = '\n' + ('-' * 40) + '\n'
-    for run in p_sep.runs:
-        run.font.size = Pt(12)
+            # 2. Convert SVG to PNG
+            temp_png_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            temp_png_path = temp_png_file.name
+            temp_png_file.close()
+            
+            cairosvg.svg2png(url=temp_svg_path, write_to=temp_png_path)
+            gantt_image_path = temp_png_path
+            print(f"Mermaid Gantt chart rendered to: {gantt_image_path}")
+
+        except Exception as e:
+            print(f"Error rendering Mermaid chart to image: {e}")
+            print("Falling back to text version of Gantt chart.")
+            # Fallback to text if image generation fails
+            p_mermaid = tf.add_paragraph()
+            p_mermaid.text = mermaid_code
+            for run in p_mermaid.runs:
+                run.font.size = Pt(12)
+                run.font.name = 'Courier New' # Use a monospaced font for the chart
+        finally:
+            if temp_svg_file and os.path.exists(temp_svg_path):
+                os.remove(temp_svg_path)
+            # Keep PNG for insertion, delete after saving presentation
+
+    if gantt_image_path:
+        # Position the image at the top of the slide
+        left = Inches(0.5)
+        top = Inches(1.5) # Below the title
+        width = Inches(9)
+        height = Inches(3) # Adjust as needed
+
+        pic = slide.shapes.add_picture(gantt_image_path, left, top, width=width, height=height)
+        
+        # Adjust the text frame position to be below the image
+        tf.top = top + height + Inches(0.2) # 0.2 inch padding
+        tf.height = prs.slide_height - tf.top - Inches(0.5) # Remaining height
+
+    # Add a separator line if an image was inserted, or if falling back to text
+    if gantt_image_path or mermaid_code.strip():
+        p_sep = tf.add_paragraph()
+        p_sep.text = '\n' + ('-' * 40) + '\n'
+        for run in p_sep.runs:
+            run.font.size = Pt(12)
 
     # Add all other content
     for line_text in other_content_lines:
@@ -112,6 +154,10 @@ def create_single_slide_presentation(md_content, output_path):
 
     print(f"Saving single-slide presentation to: {output_path}")
     prs.save(output_path)
+
+    # Clean up the generated PNG file after saving the presentation
+    if gantt_image_path and os.path.exists(gantt_image_path):
+        os.remove(gantt_image_path)
 
 
 def main():
