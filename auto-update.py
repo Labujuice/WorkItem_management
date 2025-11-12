@@ -4,7 +4,7 @@
 import os
 import glob
 import re
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import yaml
 
 def calculate_workdays(start_date_str, due_date_str):
@@ -28,16 +28,15 @@ def calculate_workdays(start_date_str, due_date_str):
 
 def update_project_files(projects_path):
     """
-    Scans project files, updates estimated_workdays, and returns project data.
+    Scans project files, updates estimated_workdays, and returns project data with paths.
     """
     project_files = glob.glob(os.path.join(projects_path, '*.md'))
-    all_projects = []
+    all_projects_with_paths = []
 
     for project_file in project_files:
         with open(project_file, 'r+') as f:
             content = f.read()
             
-            # Extract YAML frontmatter
             match = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
             if not match:
                 continue
@@ -45,12 +44,10 @@ def update_project_files(projects_path):
             frontmatter_str = match.group(1)
             project_data = yaml.safe_load(frontmatter_str)
 
-            # Get required fields
             start_date = project_data.get('start_date')
             due_date = project_data.get('due_date')
             
             if start_date and due_date:
-                # Calculate and update workdays
                 workdays = calculate_workdays(str(start_date), str(due_date))
                 
                 new_content = re.sub(
@@ -66,13 +63,13 @@ def update_project_files(projects_path):
 
                 project_data['estimated_workdays'] = workdays
             
-            all_projects.append(project_data)
+            all_projects_with_paths.append({'data': project_data, 'path': project_file})
 
-    return all_projects
+    return all_projects_with_paths
 
-def update_people_file(people_file, projects):
+def update_people_file(people_file, projects_with_paths):
     """
-    Updates the people file with lists of projects based on their status.
+    Updates the people file with lists of projects based on their status and new format.
     """
     status_map = {
         'In-Progress': '進行中項目',
@@ -86,20 +83,54 @@ def update_people_file(people_file, projects):
         '以完成項目': []
     }
 
-    for proj in projects:
-        proj_status = proj.get('status')
-        proj_title = proj.get('title', 'N/A')
-        if proj_status in status_map:
-            category = status_map[proj_status]
-            categorized_projects[category].append(proj_title)
+    today = date.today()
+
+    for item in projects_with_paths:
+        proj_data = item['data']
+        proj_path = item['path']
+        
+        proj_status = proj_data.get('status')
+        if proj_status not in status_map:
+            continue
+
+        # --- Progress Calculation ---
+        progress = 0
+        if proj_status == 'Completed':
+            progress = 100
+        elif proj_status == 'In-Progress':
+            start_date_str = str(proj_data.get('start_date', ''))
+            total_workdays = proj_data.get('estimated_workdays', 0)
+            
+            if total_workdays and total_workdays > 0:
+                days_passed = calculate_workdays(start_date_str, today.strftime('%Y-%m-%d'))
+                progress = min(int((days_passed / total_workdays) * 100), 100)
+
+        # --- Format Output String ---
+        proj_id = proj_data.get('id', 'N/A')
+        proj_title = proj_data.get('title', 'N/A')
+        proj_project = proj_data.get('project', '')
+        
+        # Create relative path for the link
+        relative_path = os.path.relpath(proj_path, os.path.dirname(people_file))
+
+        output_line = "[{id} {title} {project} {progress}%]({path})".format(
+            id=proj_id,
+            title=proj_title,
+            project=proj_project,
+            progress=progress,
+            path=relative_path.replace(os.path.sep, '/') # Ensure forward slashes for markdown links
+        )
+        
+        category = status_map[proj_status]
+        categorized_projects[category].append(output_line)
 
     # Build the markdown block
     update_block = "<!-- AUTO_UPDATE_START -->\n"
-    for category, titles in categorized_projects.items():
-        update_block += "### {}\n".format(category)
-        if titles:
-            for title in titles:
-                update_block += "- {}\n".format(title)
+    for category, lines in categorized_projects.items():
+        update_block += f"### {category}\n"
+        if lines:
+            for line in lines:
+                update_block += f"- {line}\n"
         else:
             update_block += "- 無\n"
         update_block += "\n"
@@ -108,13 +139,12 @@ def update_people_file(people_file, projects):
     # Read the people file and replace the block
     with open(people_file, 'r+') as f:
         content = f.read()
-        # Use re.DOTALL to match across newlines
         pattern = r'<!-- AUTO_UPDATE_START -->.*?<!-- AUTO_UPDATE_END -->'
         
         if re.search(pattern, content, re.DOTALL):
             new_content = re.sub(pattern, update_block, content, flags=re.DOTALL)
         else:
-            new_content = content + "\n\n" + update_block
+            new_content = content.rstrip() + "\n\n" + update_block
 
         if new_content != content:
             f.seek(0)
@@ -127,7 +157,6 @@ def main():
     projects_path = os.path.join(base_path, 'projects')
     people_path = os.path.join(base_path, 'people')
 
-    # Find the single .md file in the people directory
     try:
         people_file = glob.glob(os.path.join(people_path, '*.md'))[0]
     except IndexError:
@@ -136,19 +165,15 @@ def main():
 
     print("Starting update process...")
     
-    # 1. Update project files and get data
     projects_data = update_project_files(projects_path)
     print("Updated {} project files.".format(len(projects_data)))
 
-    # 2. Update the people file
     update_people_file(people_file, projects_data)
     print("Updated people file: {}".format(os.path.basename(people_file)))
     
     print("Update process finished.")
 
 if __name__ == '__main__':
-    # PyYAML requires datetime strings to be handled carefully.
-    # Let's monkey-patch the constructor.
     from datetime import datetime
     yaml.SafeLoader.add_constructor('tag:yaml.org,2002:timestamp', 
         lambda loader, node: loader.construct_scalar(node))
