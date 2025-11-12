@@ -87,6 +87,7 @@ def update_people_file(people_file, projects_with_paths):
         'Completed Projects': []
     }
 
+    gantt_chart_tasks = []
     today = date.today()
 
     for item in projects_with_paths:
@@ -96,6 +97,14 @@ def update_people_file(people_file, projects_with_paths):
         proj_status = proj_data.get('status')
         if proj_status not in status_map:
             continue
+
+        # --- Gantt Chart Task ---
+        if proj_status == 'In-Progress':
+            start_date_str = str(proj_data.get('start_date', ''))
+            due_date_str = str(proj_data.get('due_date', ''))
+            proj_title = proj_data.get('title', 'N/A')
+            if start_date_str and due_date_str and 'TBD' not in start_date_str:
+                gantt_chart_tasks.append(f"    {proj_title} :{start_date_str}, {due_date_str}")
 
         # --- Progress Calculation ---
         progress = 0
@@ -125,13 +134,11 @@ def update_people_file(people_file, projects_with_paths):
             path=relative_path.replace(os.path.sep, '/')
         )
         
-        # Prepend the markdown bullet point
         output_item = f"- {output_line}"
 
         if proj_status == 'In-Progress':
             report_content = proj_data.get('progress_report', '')
             if report_content:
-                # Indent the report content to appear nested under the bullet point
                 indented_report = "\n".join([f"    {line}" for line in report_content.split('\n') if line.strip()])
                 output_item += f"\n{indented_report}"
         
@@ -140,6 +147,15 @@ def update_people_file(people_file, projects_with_paths):
 
     # Build the markdown block
     update_block = "<!-- AUTO_UPDATE_START -->\n"
+
+    if gantt_chart_tasks:
+        update_block += "```mermaid\n"
+        update_block += "gantt\n"
+        update_block += "    dateFormat  YYYY-MM-DD\n"
+        update_block += "    title In-Progress Projects\n"
+        update_block += "\n".join(gantt_chart_tasks)
+        update_block += "\n```\n\n"
+
     for category, items in categorized_projects.items():
         update_block += f"### {category}\n"
         if items:
