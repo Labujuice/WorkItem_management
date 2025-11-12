@@ -68,6 +68,8 @@ def create_single_slide_presentation(md_content, output_path):
     
     # Set the slide title
     slide.shapes.title.text = title
+    # Apply font to title
+    slide.shapes.title.text_frame.paragraphs[0].font.name = "Microsoft YaHei"
     
     # Get the body text frame
     body_shape = slide.placeholders[1]
@@ -82,6 +84,10 @@ def create_single_slide_presentation(md_content, output_path):
         temp_svg_path = None
         temp_png_path = None
         try:
+            # Inject font family into Mermaid code
+            # This ensures Mermaid.js uses a Chinese-compatible font during SVG generation
+            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}} }}%%{mermaid_code}"
+
             # Create temporary file paths
             with tempfile.NamedTemporaryFile(delete=False, suffix=".svg") as temp_svg_file:
                 temp_svg_path = temp_svg_file.name
@@ -89,7 +95,7 @@ def create_single_slide_presentation(md_content, output_path):
                 temp_png_path = temp_png_file.name
 
             # 1. Generate SVG from Mermaid code directly to file
-            mermaid.Mermaid(mermaid_code).to_svg(path=temp_svg_path)
+            mermaid.Mermaid(mermaid_code_with_font).to_svg(path=temp_svg_path)
             
             # 2. Convert SVG to PNG
             cairosvg.svg2png(url=temp_svg_path, write_to=temp_png_path)
@@ -104,7 +110,7 @@ def create_single_slide_presentation(md_content, output_path):
             p_mermaid.text = mermaid_code
             for run in p_mermaid.runs:
                 run.font.size = Pt(12)
-                run.font.name = 'Courier New' # Use a monospaced font for the chart
+                run.font.name = 'Microsoft YaHei' # Use a Chinese font for the chart text
         finally:
             if temp_svg_path and os.path.exists(temp_svg_path):
                 os.remove(temp_svg_path)
@@ -129,6 +135,7 @@ def create_single_slide_presentation(md_content, output_path):
         p_sep.text = '\n' + ('-' * 40) + '\n'
         for run in p_sep.runs:
             run.font.size = Pt(12)
+            run.font.name = 'Microsoft YaHei' # Apply font to separator
 
     # Add all other content
     for line_text in other_content_lines:
@@ -145,9 +152,10 @@ def create_single_slide_presentation(md_content, output_path):
             p.text = line_text
             p.level = 0
         
-        # Set font size for every run in the paragraph
+        # Set font size and name for every run in the paragraph
         for run in p.runs:
             run.font.size = Pt(12)
+            run.font.name = 'Microsoft YaHei'
 
     print(f"Saving single-slide presentation to: {output_path}")
     prs.save(output_path)
