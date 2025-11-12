@@ -44,6 +44,10 @@ def update_project_files(projects_path):
             frontmatter_str = match.group(1)
             project_data = yaml.safe_load(frontmatter_str)
 
+            # Extract progress report
+            report_match = re.search(r'## 進度報告\n(.*?)(?=\n## |\Z)', content, re.DOTALL)
+            project_data['progress_report'] = report_match.group(1).strip() if report_match else ""
+
             start_date = project_data.get('start_date')
             due_date = project_data.get('due_date')
             
@@ -110,7 +114,6 @@ def update_people_file(people_file, projects_with_paths):
         proj_title = proj_data.get('title', 'N/A')
         proj_project = proj_data.get('project', '')
         
-        # Create relative path for the link
         relative_path = os.path.relpath(proj_path, os.path.dirname(people_file))
 
         output_line = "[{id} {title} {project} {progress}% {workdays}d]({path})".format(
@@ -119,19 +122,29 @@ def update_people_file(people_file, projects_with_paths):
             project=proj_project,
             progress=progress,
             workdays=proj_data.get('estimated_workdays', 0),
-            path=relative_path.replace(os.path.sep, '/') # Ensure forward slashes for markdown links
+            path=relative_path.replace(os.path.sep, '/')
         )
         
+        # Prepend the markdown bullet point
+        output_item = f"- {output_line}"
+
+        if proj_status == 'In-Progress':
+            report_content = proj_data.get('progress_report', '')
+            if report_content:
+                # Indent the report content to appear nested under the bullet point
+                indented_report = "\n".join([f"    {line}" for line in report_content.split('\n') if line.strip()])
+                output_item += f"\n{indented_report}"
+        
         category = status_map[proj_status]
-        categorized_projects[category].append(output_line)
+        categorized_projects[category].append(output_item)
 
     # Build the markdown block
     update_block = "<!-- AUTO_UPDATE_START -->\n"
-    for category, lines in categorized_projects.items():
+    for category, items in categorized_projects.items():
         update_block += f"### {category}\n"
-        if lines:
-            for line in lines:
-                update_block += f"- {line}\n"
+        if items:
+            for item in items:
+                update_block += f"{item}\n"
         else:
             update_block += "- 無\n"
         update_block += "\n"
