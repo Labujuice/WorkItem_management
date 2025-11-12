@@ -5,9 +5,9 @@
 ## ✨ 核心功能 (Features)
 
 - **自動計算工作日**: 根據專案的 `start_date` 和 `due_date` 自動計算並更新 `estimated_workdays`。
-- **視覺化甘特圖**: 自動為有明確日期的專案產生 [Mermaid](https://mermaid-js.github.io/mermaid/#/gantt) 甘特圖，將專案時程視覺化。
+- **視覺化甘特圖**: 自動為有明確日期的專案產生 [Mermaid](https://mermaid-js.github.io/mermaid/#/gantt) 甘特圖，並在圖表下方顯示生成日期，將專案時程視覺化。
 - **狀態分類**: 將所有專案按狀態 (`In-Progress`, `Pending`, `Completed`) 清晰分類。
-- **詳細進度報告**: 自動提取 `In-Progress` 專案的「進度報告」內容，並顯示在主列表中。
+- **詳細進度報告**: 自動提取 `In-Progress` 專案的「進度報告」內容，並顯示最新的五個項目在主列表中。
 - **自動排序**: 列表中的專案會根據檔案名稱自動降冪排序，確保最新的項目永遠在最上面。
 
 ## 📂 專案結構 (Project Structure)
@@ -58,7 +58,7 @@ actual_end_date: "" # 完成後填寫
 
 您可以使用 pip 來安裝所需的套件：
 ```bash
-pip install PyYAML
+pip install PyYAML python-pptx mermaid-py cairosvg
 ```
 
 ## 🚀 使用方法 (Usage)
@@ -67,4 +67,36 @@ pip install PyYAML
 
 ```bash
 python3 auto-update.py
+```
+
+## 📊 PPTX 報告生成工具 (PPTX Report Generation Tool)
+
+`create_presentation.py` 腳本用於將 `people/YourName.md` 檔案轉換為單頁的 PowerPoint 簡報 (`.pptx`)。這份簡報會將所有相關資訊濃縮在一個頁面中，便於快速概覽。
+
+### 核心功能 (Features)
+
+- **單頁簡報**: 將所有內容（包括甘特圖和專案列表）濃縮在單一投影片中。
+- **甘特圖圖片嵌入**: 自動將 Mermaid 甘特圖渲染為圖片並嵌入投影片，而非原始程式碼。
+- **16:10 比例**: 投影片比例設定為主流的 16:10，並確保內容佈局合理不重疊。
+- **中文字體支援**: 確保簡報中的中文字體正常顯示。
+- **內容格式化**: 自動移除連結、多餘空白，並將專案狀態標題設為粗體第一層級，同時在內容開頭加入生成日期。
+
+### 安裝需求 (Requirements)
+
+除了上述的 Python 3 和 PyYAML，此工具還需要以下套件：
+- `python-pptx`
+- `mermaid-py`
+- `cairosvg`
+
+您可以使用 pip 來安裝所需的套件：
+```bash
+pip install python-pptx mermaid-py cairosvg
+```
+
+### 使用方法 (Usage)
+
+在專案根目錄下執行 `create_presentation.py` 腳本即可。腳本會讀取 `people/` 目錄下的 Markdown 報告，並在同一個目錄中生成 `.pptx` 檔案。
+
+```bash
+python3 create_presentation.py
 ```
