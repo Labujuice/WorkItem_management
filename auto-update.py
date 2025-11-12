@@ -26,6 +26,42 @@ def calculate_workdays(start_date_str, due_date_str):
     except (ValueError, TypeError):
         return 0
 
+def filter_progress_report(report_content):
+    """
+    Filters a progress report to show only the last 5 dated entries.
+    Assumes a flat list format where each line starts with a date.
+    """
+    dated_lines = []
+    for line in report_content.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Regex to find a date like YYYY-MM-DD at the start of the line,
+        # accommodating markdown like "* **YYYY-MM-DD:** ..."
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', line)
+        
+        if match:
+            date_str = match.group(1)
+            try:
+                log_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                dated_lines.append({'date': log_date, 'line': line})
+            except ValueError:
+                # Ignore lines where the matched text isn't a valid date
+                continue
+
+    # Sort by date in descending order to find the latest 5
+    dated_lines.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Get the top 5
+    latest_five = dated_lines[:5]
+    
+    # Sort the final list back in chronological (ascending) order for display
+    latest_five.sort(key=lambda x: x['date'])
+    
+    # Return the lines joined as a single string
+    return '\n'.join([item['line'] for item in latest_five])
+
 def update_project_files(projects_path):
     """
     Scans project files, updates estimated_workdays, and returns project data with paths.
@@ -144,8 +180,10 @@ def update_people_file(people_file, projects_with_paths):
         if proj_status == 'In-Progress':
             report_content = proj_data.get('progress_report', '')
             if report_content:
-                indented_report = "\n".join([f"    {line}" for line in report_content.split('\n') if line.strip()])
-                output_item += f"\n{indented_report}"
+                filtered_report = filter_progress_report(report_content)
+                if filtered_report:
+                    indented_report = "\n".join([f"    {line}" for line in filtered_report.split('\n') if line.strip()])
+                    output_item += f"\n{indented_report}"
         
         category = status_map[proj_status]
         categorized_projects[category].append(output_item)
