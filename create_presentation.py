@@ -84,15 +84,15 @@ def create_single_slide_presentation(md_content, output_path):
         temp_svg_path = None
         temp_png_path = None
         try:
-            # Inject font family into Mermaid code
-            # This ensures Mermaid.js uses a Chinese-compatible font during SVG generation
-            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}} }}%%{mermaid_code}"
-
             # Create temporary file paths
             with tempfile.NamedTemporaryFile(delete=False, suffix=".svg") as temp_svg_file:
                 temp_svg_path = temp_svg_file.name
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_png_file:
                 temp_png_path = temp_png_file.name
+
+            # Inject font family into Mermaid code
+            # This ensures Mermaid.js uses a Chinese-compatible font during SVG generation
+            mermaid_code_with_font = f"%%{{init: {{'theme': 'default', 'fontFamily': 'Microsoft YaHei, sans-serif'}} }}%%\n{mermaid_code}"
 
             # 1. Generate SVG from Mermaid code directly to file
             mermaid.Mermaid(mermaid_code_with_font).to_svg(path=temp_svg_path)
@@ -107,10 +107,10 @@ def create_single_slide_presentation(md_content, output_path):
             print("Falling back to text version of Gantt chart.")
             # Fallback to text if image generation fails
             p_mermaid = tf.add_paragraph()
-            p_mermaid.text = mermaid_code
-            for run in p_mermaid.runs:
-                run.font.size = Pt(12)
-                run.font.name = 'Microsoft YaHei' # Use a Chinese font for the chart text
+            run = p_mermaid.add_run()
+            run.text = mermaid_code
+            run.font.size = Pt(12)
+            run.font.name = 'Microsoft YaHei' # Use a Chinese font for the chart text
         finally:
             if temp_svg_path and os.path.exists(temp_svg_path):
                 os.remove(temp_svg_path)
@@ -132,31 +132,39 @@ def create_single_slide_presentation(md_content, output_path):
     # Add a separator line if an image was inserted, or if falling back to text
     if gantt_image_path or mermaid_code.strip():
         p_sep = tf.add_paragraph()
-        p_sep.text = '\n' + ('-' * 40) + '\n'
-        for run in p_sep.runs:
-            run.font.size = Pt(12)
-            run.font.name = 'Microsoft YaHei' # Apply font to separator
+        run = p_sep.add_run()
+        run.text = '\n' + ('-' * 40) + '\n'
+        run.font.size = Pt(12)
+        run.font.name = 'Microsoft YaHei' # Apply font to separator
 
     # Add all other content
     for line_text in other_content_lines:
         p = tf.add_paragraph()
         
-        # Handle basic indentation for bullet points
-        if line_text.strip().startswith('* '):
-            p.text = line_text.strip().lstrip('* ')
+        cleaned_text = line_text.strip() # Remove all leading/trailing whitespace
+
+        # Remove Links from Sub-items: finds [text](url) and replaces it with just text
+        cleaned_text = re.sub(r'\[(.*?)\]\(.*\)', r'\1', cleaned_text)
+
+        run = p.add_run() # Add a run to the paragraph
+        run.font.size = Pt(12)
+        run.font.name = 'Microsoft YaHei'
+        
+        # Bold and Level 1 for Status Headings
+        if cleaned_text.endswith('Projects'): # Heuristic to identify status headings
+            run.text = cleaned_text
+            run.font.bold = True
+            p.level = 0 # Highest level
+        elif cleaned_text.startswith('* '):
+            run.text = cleaned_text.lstrip('* ').strip() # Remove bullet and any extra spaces
             p.level = 2
-        elif line_text.strip().startswith('- '):
-            p.text = line_text.strip().lstrip('- ')
+        elif cleaned_text.startswith('- '):
+            run.text = cleaned_text.lstrip('- ').strip() # Remove bullet and any extra spaces
             p.level = 1
         else:
-            p.text = line_text
+            run.text = cleaned_text
             p.level = 0
         
-        # Set font size and name for every run in the paragraph
-        for run in p.runs:
-            run.font.size = Pt(12)
-            run.font.name = 'Microsoft YaHei'
-
     print(f"Saving single-slide presentation to: {output_path}")
     prs.save(output_path)
 
