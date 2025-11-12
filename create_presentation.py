@@ -79,22 +79,19 @@ def create_single_slide_presentation(md_content, output_path):
     gantt_image_path = None
     if mermaid_code.strip():
         print("Attempting to render Mermaid Gantt chart to image...")
-        temp_svg_file = None
-        temp_png_file = None
+        temp_svg_path = None
+        temp_png_path = None
         try:
-            # 1. Generate SVG from Mermaid code
-            svg_string = mermaid.Mermaid(mermaid_code).to_svg()
-            
-            temp_svg_file = tempfile.NamedTemporaryFile(delete=False, suffix=".svg")
-            temp_svg_file.write(svg_string.encode('utf-8'))
-            temp_svg_path = temp_svg_file.name
-            temp_svg_file.close()
+            # Create temporary file paths
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".svg") as temp_svg_file:
+                temp_svg_path = temp_svg_file.name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_png_file:
+                temp_png_path = temp_png_file.name
 
-            # 2. Convert SVG to PNG
-            temp_png_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            temp_png_path = temp_png_file.name
-            temp_png_file.close()
+            # 1. Generate SVG from Mermaid code directly to file
+            mermaid.Mermaid(mermaid_code).to_svg(path=temp_svg_path)
             
+            # 2. Convert SVG to PNG
             cairosvg.svg2png(url=temp_svg_path, write_to=temp_png_path)
             gantt_image_path = temp_png_path
             print(f"Mermaid Gantt chart rendered to: {gantt_image_path}")
@@ -109,9 +106,9 @@ def create_single_slide_presentation(md_content, output_path):
                 run.font.size = Pt(12)
                 run.font.name = 'Courier New' # Use a monospaced font for the chart
         finally:
-            if temp_svg_file and os.path.exists(temp_svg_path):
+            if temp_svg_path and os.path.exists(temp_svg_path):
                 os.remove(temp_svg_path)
-            # Keep PNG for insertion, delete after saving presentation
+            # temp_png_path will be cleaned up after prs.save()
 
     if gantt_image_path:
         # Position the image at the top of the slide
