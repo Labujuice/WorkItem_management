@@ -75,9 +75,9 @@ def update_people_file(people_file, projects):
     Updates the people file with lists of projects based on their status.
     """
     status_map = {
-        '進行中': '進行中項目',
-        '等待中': '等待進行項目',
-        '已完成': '以完成項目'
+        'In-Progress': '進行中項目',
+        'Pending': '等待進行項目',
+        'Completed': '以完成項目'
     }
     
     categorized_projects = {
